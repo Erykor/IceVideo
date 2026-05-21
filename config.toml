@@ -1,0 +1,123 @@
+# IceVideo runtime config. Copy to your project dir and tweak as needed.
+# Paths are relative to where you run `icevideo` from.
+
+[paths]
+input_dir = "."
+work_dir = "./work"
+output_dir = "./output"
+# Glob pattern for source videos. GoPro: "GX*.MP4"; phone: "*.mp4 *.MOV".
+input_glob = "*.MP4"
+
+[durations]
+# (label, seconds) pairs. Add/remove to render different versions.
+versions = [
+    { label = "1min",  seconds = 60 },
+    { label = "3min",  seconds = 180 },
+    { label = "10min", seconds = 600 },
+]
+
+[transcribe]
+# Whisper model: tiny / base / small / medium / large-v3 / turbo
+# On CPU, base is the practical limit; on CUDA, turbo or large-v3.
+model = "base"
+language = "auto"           # "auto" or ISO code like "en", "es"
+word_conf_threshold = 0.4   # drop words below this probability
+vad = false                 # silero VAD often hits GitHub rate limits
+
+[signals]
+# Frame rate used for CLIP image embedding extraction.
+clip_fps = 0.5
+# Number of sample frames per video (just for human review).
+sample_frames = 4
+
+[scoring]
+# Weights for the per-second score. All signals are z-scored per video first.
+motion = 1.0              # ffmpeg scene change score
+flow = 0.5                # Farneback optical flow magnitude
+audio = 0.6               # RMS dBFS gated by voiceness
+dialogue = 0.6            # word density (3s smoothed)
+laughter = 1.2            # ZCR + envelope variance heuristic
+keyword = 1.0             # raw count of highlight-keyword hits
+clip = 1.5                # CLIP semantic max(positive) - 0.5*negative
+faces = 0.6               # face area (protagonist weighted higher)
+protagonist_speech = 0.5  # diarize: main speaker is talking
+telemetry = 0.4           # GoPro/EXIF: golden hour + GPS jumps
+
+[selection]
+min_seg = 4              # seconds, shortest a peak segment can be
+max_seg = 10             # seconds, longest before we stop expanding
+peak_pad = 1             # extra seconds around each peak
+diversity_threshold = 0.92  # cosine sim above which segments are considered similar (CLIP)
+peak_top_pct = 10        # top % of segments get speed ramp
+per_video_max = 8        # cap a single source video's segments per version
+enforce_hook = false     # force first segment to be top-scoring
+enforce_opener_closer = false  # force first/last from chronological ends
+
+[boundaries]
+silence_noise_db = -30     # silencedetect threshold
+silence_min_dur = 0.15     # seconds
+scene_threshold = 0.3
+snap_window = 0.7          # seconds around integer boundary to look for snap target
+duration_tolerance = 0.2   # ±20% length wobble allowed when snapping
+
+[render]
+codec = "h264_nvenc"       # "h264_nvenc" / "hevc_nvenc" / "libx264"
+preset = "p4"              # NVENC: p1..p7 ; libx264: ultrafast..veryslow
+cq = 23                    # NVENC -cq ; libx264 use -crf
+width = 1920
+height = 1080
+fps = 30
+audio_bitrate = "192k"
+loudnorm_i = -16           # target loudness LUFS
+loudnorm_tp = -1.5
+loudnorm_lra = 11
+xfade_duration = 0.3
+slow_factor = 0.7          # peak segments time-scaled to this rate
+audio_fade = 0.12
+brightness_clamp = 0.15    # cap brightness adjustment per segment
+# music_path = "/path/to/track.mp3"    # set to enable music bed
+music_duck_db = -10        # how much to lower music when speech is present
+music_volume_db = -8       # base music level (dB attenuation from peak)
+
+[jl_cuts]
+audio_lead = 0.5           # J cut: dialogue segments' audio starts this many seconds earlier
+
+[lint]
+min_seg = 2.0
+max_seg = 15.0
+max_consecutive_same_source = 3
+adjacent_sim_max = 0.93
+total_duration_tolerance = 0.05  # +/- fraction of target
+
+[critique]
+n_thumbnails = 10
+vlm_model = "claude-haiku-4-5-20251001"
+iterate_threshold = 7.0    # overall score below this triggers another pass
+
+[clip]
+# Image-encoder model. ViT-B-32 is small (~340 MB) and runs in ~10s/100frames on CPU.
+model = "ViT-B-32"
+pretrained = "openai"     # or "laion2b_s34b_b79k" (larger)
+# Positive prompts contribute their similarity; negative prompts subtract half.
+positive_prompts = [
+    "a person riding a horse, action shot",
+    "a stunning scenic landscape with golden hour sunset light",
+    "horses in a field of wildflowers",
+    "a group of people on horseback smiling together",
+    "a horse galloping fast",
+    "horses on a mountain ridge with a wide view",
+    "many horses running together",
+]
+negative_prompts = [
+    "an empty landscape with no people or animals",
+    "a blurry low quality photograph",
+]
+
+[keywords]
+# Words that count as "highlight" hits in the transcript (case-insensitive).
+en = ["wow", "look", "beautiful", "amazing", "perfect", "yes", "yeah", "haha",
+      "incredible", "stunning", "lovely", "gallop", "trot", "fast"]
+es = ["guau", "increíble", "mira", "bonito", "hermoso", "vamos", "perfecto",
+      "caballo", "trota", "galopa", "jaja"]
+de = ["schön", "wunderbar", "toll", "wunderschön", "ja"]
+generic = ["wooo", "oh"]
